@@ -239,7 +239,7 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
             ftms.live_properties if self._task2 else ftms.supported_properties
         )
 
-        _LOGGER.debug("Device Information: %s", ftms.device_info)
+        _LOGGER.debug("Device Information: %s",  ftms.device_info)
         _LOGGER.debug("Machine type: %r", ftms.machine_type)
         _LOGGER.debug("Available sensors: %s", ftms.available_properties)
         _LOGGER.debug("Supported settings: %s", ftms.supported_settings)
@@ -257,11 +257,19 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
 
             s1 = self._ftms.device_info.get("manufacturer", "FTMS")
             s2 = self._ftms.device_info.get("model", "GENERIC")
-            s3 = f"({self._ftms.device_info.get("serial_number", unique_id)})"
+            s3 = f"({self._ftms.device_info.get('serial_number', unique_id)})"
 
             return self.async_create_entry(
                 title=" ".join((s1, s2, s3)),
-                data={CONF_ADDRESS: self._ftms.address},
+                data={
+                    CONF_ADDRESS: self._ftms.address,
+                    # Store device info so we don't need to connect on every HA restart
+                    "device_info": self._ftms.device_info,
+                    "machine_type": self._ftms.machine_type.name,
+                    "ftms_variant": self._ftms.ftms_variant,
+                    "available_properties": list(self._ftms.available_properties),
+                    "supported_settings": list(self._ftms.supported_settings),
+                },
                 options={CONF_SENSORS: user_input[CONF_SENSORS]},
             )
 
@@ -279,9 +287,12 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
             }
         )
 
+        # Auto-select all available sensors by default
+        all_sensors = list(self._ftms.available_properties)
+        
         return self.async_show_form(
             step_id="information",
             data_schema=self.add_suggested_values_to_schema(
-                schema, {CONF_SENSORS: self._suggested_sensors}
+                schema, {CONF_SENSORS: all_sensors}
             ),
         )

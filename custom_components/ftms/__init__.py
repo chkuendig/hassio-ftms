@@ -69,31 +69,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: FtmsConfigEntry) -> bool
 
     coordinator = DataCoordinator(hass, ftms)
 
-    try:
-        await ftms.connect()
+    # Use stored device info from config entry (set during config flow)
+    # This avoids needing to connect on every HA restart
+    stored_device_info = entry.data.get("device_info", {})
+    
+    if stored_device_info:
+        _LOGGER.debug(f"Using stored device info: {stored_device_info}")
+        _LOGGER.debug(f"Stored machine type: {entry.data.get('machine_type')}")
+        _LOGGER.debug(f"Stored FTMS variant: {entry.data.get('ftms_variant')}")
+        _LOGGER.debug(f"Stored available properties: {entry.data.get('available_properties')}")
+        _LOGGER.debug(f"Stored supported settings: {entry.data.get('supported_settings')}")
+        
+        # Don't auto-connect - let the connection switch control this
+        # This allows other apps (Sole app, Zwift) to connect when HA isn't actively using it
+    else:
+        # Legacy entry without stored device info - need to connect once to get it
+        _LOGGER.warning("No stored device info, connecting to read it (one-time migration)")
+        try:
+            await ftms.connect()
+            stored_device_info = ftms.device_info
+            
+            # Update config entry with device info for future use
+            new_data = {
+                **entry.data,
+                "device_info": ftms.device_info,
+                "machine_type": ftms.machine_type.name,
+                "ftms_variant": ftms.ftms_variant,
+                "available_properties": list(ftms.available_properties),
+                "supported_settings": list(ftms.supported_settings),
+            }
+            hass.config_entries.async_update_entry(entry, data=new_data)
+            
+            # Disconnect after reading info
+            await ftms.disconnect()
+            
+        except BleakError as exc:
+            raise ConfigEntryNotReady(translation_key="connection_failed") from exc
 
-    except BleakError as exc:
-        raise ConfigEntryNotReady(translation_key="connection_failed") from exc
-
-    assert ftms.machine_type.name
-
-    _LOGGER.debug(f"Device Information: {ftms.device_info}")
-    _LOGGER.debug(f"Machine type: {ftms.machine_type.name}")
-    _LOGGER.debug(f"Available sensors: {ftms.available_properties}")
-    _LOGGER.debug(f"Supported settings: {ftms.supported_settings}")
-    _LOGGER.debug(f"Supported ranges: {ftms.supported_ranges}")
+    _LOGGER.debug(f"Device Information: {stored_device_info}")
 
     unique_id = "".join(
-        x for x in ftms.device_info.get("serial_number", address) if x.isalnum()
+        x for x in stored_device_info.get("serial_number", address) if x.isalnum()
     ).lower()
 
-    _LOGGER.debug(f"Registered new FTMS device. UniqueID is '{unique_id}'.")
+    _LOGGER.debug(f"Registered FTMS device. UniqueID is '{unique_id}'. Connection switch controls BLE connection.")
 
     device_info = dr.DeviceInfo(
         connections={(dr.CONNECTION_BLUETOOTH, ftms.address)},
         identifiers={(DOMAIN, unique_id)},
-        translation_key=ftms.machine_type.name.lower(),
-        **ftms.device_info,
+        translation_key=entry.data.get("machine_type", "treadmill").lower(),
+        **stored_device_info,
     )
 
     entry.runtime_data = FtmsData(

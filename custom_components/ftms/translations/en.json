@@ -185,6 +185,18 @@
       },
       "reset": {
         "name": "Reset"
+      },
+      "speed_up": {
+        "name": "Speed Up"
+      },
+      "speed_down": {
+        "name": "Speed Down"
+      },
+      "incline_up": {
+        "name": "Incline Up"
+      },
+      "incline_down": {
+        "name": "Incline Down"
       }
     },
     "number": {
