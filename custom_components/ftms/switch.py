@@ -40,88 +40,43 @@ async def async_setup_entry(
 
 
 class ConnectionSwitchEntity(FtmsEntity, SwitchEntity, RestoreEntity):
-    """Representation of FTMS connection switch.
-    
-    Controls BLE connection to the fitness machine.
-    Defaults to OFF (disconnected) to allow other apps to connect.
-    Turn ON to enable HA control and sensor updates.
-    """
+    """Representation of FTMS connection switch."""
 
     @override
     async def async_added_to_hass(self) -> None:
         """Call when the switch is added to hass."""
-        # Check actual connection state first
-        if self.ftms.is_connected:
-            self._attr_is_on = True
-            _LOGGER.debug("Device already connected at startup")
-        else:
-            # Check restored state
-            state = await self.async_get_last_state()
-            
-            # Default to OFF (disconnected) - this allows other apps to use the device
-            # Only connect if explicitly turned on previously
-            self._attr_is_on = False
+        state = await self.async_get_last_state()
+        self._attr_is_on = True
 
-            if state is not None and state.state != STATE_OFF:
-                # User had it ON before, try to reconnect
-                _LOGGER.info(f"Restoring connection to {self.ftms.name}")
-                try:
-                    await self.ftms.connect()
-                    self._attr_is_on = True
-                except Exception as e:
-                    _LOGGER.warning(f"Failed to restore connection: {e}")
-                    self._attr_is_on = False
+        if state is not None and state.state == STATE_OFF:
+            await self.ftms.disconnect()
+            self._attr_is_on = False
 
         await super().async_added_to_hass()
 
-    @property
-    def is_on(self) -> bool:
-        """Return true if connected."""
-        # Sync with actual BLE connection state
-        return self.ftms.is_connected
-
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn the entity on - connect to the device."""
-        if self.ftms.is_connected:
-            _LOGGER.debug("Already connected")
-            self._attr_is_on = True
-            self.async_write_ha_state()
-            return
+        """Turn the entity on."""
 
         try:
-            _LOGGER.info(f"Connecting to {self.ftms.name}...")
             await self.ftms.connect()
-            self._attr_is_on = True
-            _LOGGER.info(f"Connected to {self.ftms.name}")
 
-        except BleakError as e:
-            _LOGGER.error(f"Failed to connect: {e}")
-            self._attr_is_on = False
-        
-        self.async_write_ha_state()
-        # Notify other entities that connection state changed
-        self._data.coordinator.notify_connection_changed()
+        except BleakError:
+            self.hass.config_entries.async_schedule_reload(self._data.entry_id)
+
+        finally:
+            self._attr_is_on = True
+            self.async_write_ha_state()
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn the entity off - disconnect from the device."""
-        if not self.ftms.is_connected:
-            _LOGGER.debug("Already disconnected")
-            self._attr_is_on = False
-            self.async_write_ha_state()
-            return
+        """Turn the entity off."""
 
-        _LOGGER.info(f"Disconnecting from {self.ftms.name}...")
         await self.ftms.disconnect()
         self._attr_is_on = False
-        _LOGGER.info(f"Disconnected from {self.ftms.name}")
         self.async_write_ha_state()
-        # Notify other entities that connection state changed
-        self._data.coordinator.notify_connection_changed()
 
     @property
     @override
     def available(self) -> bool:
         return True
-

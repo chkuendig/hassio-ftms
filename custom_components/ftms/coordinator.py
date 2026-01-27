@@ -16,7 +16,6 @@ class DataCoordinator(DataUpdateCoordinator[FtmsEvents]):
 
     def __init__(self, hass: HomeAssistant, ftms: FitnessMachine) -> None:
         """Initialize the coordinator."""
-        self._ftms = ftms
 
         def _on_ftms_event(data: FtmsEvents):
             _LOGGER.debug(f"Event data: {data}")
@@ -25,8 +24,3 @@ class DataCoordinator(DataUpdateCoordinator[FtmsEvents]):
         super().__init__(hass, _LOGGER, name=DOMAIN)
 
         ftms.set_callback(_on_ftms_event)
-
-    def notify_connection_changed(self) -> None:
-        """Notify all listeners that connection state changed."""
-        _LOGGER.debug("Connection state changed, notifying listeners")
-        self.async_set_updated_data(self.data)
