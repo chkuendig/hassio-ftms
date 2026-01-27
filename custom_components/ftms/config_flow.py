@@ -266,7 +266,7 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
                     # Store device info so we don't need to connect on every HA restart
                     "device_info": self._ftms.device_info,
                     "machine_type": self._ftms.machine_type.name,
-                    "ftms_variant": self._ftms.ftms_variant,
+                    "protocol_variant": self._ftms.protocol_variant,
                     "available_properties": list(self._ftms.available_properties),
                     "supported_settings": list(self._ftms.supported_settings),
                 },

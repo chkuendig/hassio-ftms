@@ -18,10 +18,6 @@ _ENTITIES = (
     c.STOP,
     c.START,
     c.PAUSE,
-    c.SPEED_UP,
-    c.SPEED_DOWN,
-    c.INCLINE_UP,
-    c.INCLINE_DOWN,
 )
 
 
@@ -33,26 +29,15 @@ async def async_setup_entry(
     """Set up a FTMS button entry."""
 
     ftms = entry.runtime_data.ftms
-    
-    # Get supported settings from stored data (works even when not connected)
-    stored_settings = entry.data.get("supported_settings", [])
-    
-    # Check if this is a Sole device (from stored variant or device name)
-    is_sole = (
-        entry.data.get("ftms_variant") == "sole" or
-        (ftms.name and any(ftms.name.startswith(prefix) for prefix in ("F63", "F65", "F80", "F85", "F89", "S77", "TT8", "ST90", "TRX")))
-    )
-    
-    # Build list of supported buttons
-    supported = set(stored_settings)
-    
+
+    # Get supported settings from ftms instance
+    # Sole treadmills return empty tuple since they don't support FTMS Control Point
+    supported = set(ftms.supported_settings)
+
     # Basic control buttons (start, stop, pause, reset) are always available
-    # for any fitness machine - they're fundamental FTMS controls
-    supported.update([c.START, c.STOP, c.PAUSE, c.RESET])
-    
-    if is_sole:
-        # Add Sole-specific incremental controls
-        supported.update([c.SPEED_UP, c.SPEED_DOWN, c.INCLINE_UP, c.INCLINE_DOWN])
+    # for devices that support FTMS Control Point
+    if supported or entry.data.get("protocol_variant") != "sole":
+        supported.update([c.START, c.STOP, c.PAUSE, c.RESET])
 
     _LOGGER.debug("Creating button entities for: %s", supported)
 
@@ -85,15 +70,3 @@ class FtmsButtonEntity(FtmsEntity, ButtonEntity):
 
         elif self.key == c.PAUSE:
             await self.ftms.pause()
-
-        elif self.key == c.SPEED_UP:
-            await self.ftms.speed_up()
-
-        elif self.key == c.SPEED_DOWN:
-            await self.ftms.speed_down()
-
-        elif self.key == c.INCLINE_UP:
-            await self.ftms.incline_up()
-
-        elif self.key == c.INCLINE_DOWN:
-            await self.ftms.incline_down()
