@@ -47,12 +47,9 @@ class OptionsFlowHandler(OptionsFlowWithConfigEntry):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        address = self.config_entry.data[CONF_ADDRESS]
-
-        if not (srv_info := async_last_service_info(self.hass, address)):
-            return self.async_abort(reason="no_devices_found")
-
-        cli = get_client(srv_info.device, srv_info.advertisement)
+        # Use the stored available_properties from initial setup
+        # (these are the properties that were actually detected)
+        available_props = self.config_entry.data.get("available_properties", [])
 
         schema = vol.Schema(
             {
@@ -60,7 +57,7 @@ class OptionsFlowHandler(OptionsFlowWithConfigEntry):
                     {
                         "select": {
                             "multiple": True,
-                            "options": list(cli.available_properties),
+                            "options": available_props,
                             "translation_key": CONF_SENSORS,
                         }
                     }
@@ -266,12 +263,16 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
                     # Store device info so we don't need to connect on every HA restart
                     "device_info": self._ftms.device_info,
                     "machine_type": self._ftms.machine_type.name,
-                    "protocol_variant": self._ftms.protocol_variant,
-                    "available_properties": list(self._ftms.available_properties),
+                    # Store what was actually detected, not all possible properties
+                    "available_properties": list(self._ftms.live_properties),
                     "supported_settings": list(self._ftms.supported_settings),
                 },
                 options={CONF_SENSORS: user_input[CONF_SENSORS]},
             )
+
+        # Use live_properties (what was actually detected from the device)
+        # This ensures we only show sensors that the device actually sends
+        detected_sensors = list(self._ftms.live_properties)
 
         schema = vol.Schema(
             {
@@ -279,7 +280,7 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
                     {
                         "select": {
                             "multiple": True,
-                            "options": list(self._ftms.available_properties),
+                            "options": detected_sensors,
                             "translation_key": CONF_SENSORS,
                         }
                     }
@@ -287,12 +288,9 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
             }
         )
 
-        # Auto-select all available sensors by default
-        all_sensors = list(self._ftms.available_properties)
-        
         return self.async_show_form(
             step_id="information",
             data_schema=self.add_suggested_values_to_schema(
-                schema, {CONF_SENSORS: all_sensors}
+                schema, {CONF_SENSORS: detected_sensors}
             ),
         )

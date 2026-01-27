@@ -79,8 +79,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: FtmsConfigEntry) -> bool
 
     _LOGGER.debug("Device Information: %s", ftms.device_info)
     _LOGGER.debug("Machine type: %s", ftms.machine_type.name)
-    _LOGGER.debug("Protocol variant: %s", ftms.protocol_variant)
-    _LOGGER.debug("Available sensors: %s", ftms.available_properties)
+    _LOGGER.debug("Available sensors (all possible): %s", ftms.available_properties)
+    _LOGGER.debug("Supported sensors (from device features): %s", ftms.supported_properties)
     _LOGGER.debug("Supported settings: %s", ftms.supported_settings)
     _LOGGER.debug("Supported ranges: %s", ftms.supported_ranges)
 

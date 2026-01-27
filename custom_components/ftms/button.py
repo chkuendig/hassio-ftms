@@ -31,12 +31,12 @@ async def async_setup_entry(
     ftms = entry.runtime_data.ftms
 
     # Get supported settings from ftms instance
-    # Sole treadmills return empty tuple since they don't support FTMS Control Point
+    # Devices without FTMS Control Point support return empty tuple
     supported = set(ftms.supported_settings)
 
-    # Basic control buttons (start, stop, pause, reset) are always available
-    # for devices that support FTMS Control Point
-    if supported or entry.data.get("protocol_variant") != "sole":
+    # Basic control buttons (start, stop, pause, reset) are available
+    # only for devices that support FTMS Control Point
+    if supported:
         supported.update([c.START, c.STOP, c.PAUSE, c.RESET])
 
     _LOGGER.debug("Creating button entities for: %s", supported)
