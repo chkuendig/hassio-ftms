@@ -28,6 +28,10 @@ async def async_setup_entry(
 ) -> None:
     """Set up a FTMS button entry."""
 
+    # Only create buttons if device supports FTMS Control Point
+    if not entry.runtime_data.ftms.supported_settings:
+        return
+
     entities = [
         FtmsButtonEntity(
             entry=entry,
