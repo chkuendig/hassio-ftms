@@ -39,7 +39,9 @@ class FtmsEntity(CoordinatorEntity[DataCoordinator], Entity):
 
     @property
     def available(self) -> bool:
-        return self.ftms.is_connected and super().available
+        # For FTMS, availability is based on BLE connection status
+        # We don't rely on coordinator's last_update_success since we use push updates
+        return self.ftms.is_connected
 
     @property
     def ftms(self):
@@ -47,4 +49,6 @@ class FtmsEntity(CoordinatorEntity[DataCoordinator], Entity):
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        pass
+        """Handle updated data from the coordinator."""
+        # This is called when coordinator has new data (including connection changes)
+        self.async_write_ha_state()
