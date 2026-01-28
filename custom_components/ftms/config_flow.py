@@ -25,6 +25,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.selector import selector
 from pyftms import (
     FitnessMachine,
+    MachineType,
     NotFitnessMachineError,
     get_client,
     get_machine_type_from_service_data,
@@ -47,12 +48,9 @@ class OptionsFlowHandler(OptionsFlowWithConfigEntry):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        address = self.config_entry.data[CONF_ADDRESS]
-
-        if not (srv_info := async_last_service_info(self.hass, address)):
-            return self.async_abort(reason="no_devices_found")
-
-        cli = get_client(srv_info.device, srv_info.advertisement)
+        # Use the stored available_properties from initial setup
+        # (these are the properties that were actually detected)
+        available_props = self.config_entry.data.get("available_properties", [])
 
         schema = vol.Schema(
             {
@@ -60,7 +58,7 @@ class OptionsFlowHandler(OptionsFlowWithConfigEntry):
                     {
                         "select": {
                             "multiple": True,
-                            "options": list(cli.available_properties),
+                            "options": available_props,
                             "translation_key": CONF_SENSORS,
                         }
                     }
@@ -212,6 +210,10 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self._task1.done():
                 uncompleted_task, action = self._task1, "connecting"
 
+        # Check if type detection failed (for Unknown devices)
+        if not uncompleted_task and ftms.machine_type == MachineType.UNKNOWN:
+            return self.async_abort(reason="not_supported")
+
         if not uncompleted_task and self._discovery_time:
             if not self._task2:
                 coro = asyncio.sleep(self._discovery_time)
@@ -261,9 +263,21 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
 
             return self.async_create_entry(
                 title=" ".join((s1, s2, s3)),
-                data={CONF_ADDRESS: self._ftms.address},
+                data={
+                    CONF_ADDRESS: self._ftms.address,
+                    # Store device info so we don't need to connect on every HA restart
+                    "device_info": self._ftms.device_info,
+                    "machine_type": self._ftms.machine_type.name,
+                    # Store what was actually detected, not all possible properties
+                    "available_properties": list(self._ftms.live_properties),
+                    "supported_settings": list(self._ftms.supported_settings),
+                },
                 options={CONF_SENSORS: user_input[CONF_SENSORS]},
             )
+
+        # Use live_properties (what was actually detected from the device)
+        # This ensures we only show sensors that the device actually sends
+        detected_sensors = list(self._ftms.live_properties)
 
         schema = vol.Schema(
             {
@@ -271,7 +285,7 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
                     {
                         "select": {
                             "multiple": True,
-                            "options": list(self._ftms.available_properties),
+                            "options": detected_sensors,
                             "translation_key": CONF_SENSORS,
                         }
                     }
@@ -282,6 +296,6 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="information",
             data_schema=self.add_suggested_values_to_schema(
-                schema, {CONF_SENSORS: self._suggested_sensors}
+                schema, {CONF_SENSORS: detected_sensors}
             ),
         )

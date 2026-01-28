@@ -57,15 +57,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: FtmsConfigEntry) -> bool
         if ftms_.need_connect:
             hass.config_entries.async_schedule_reload(entry.entry_id)
 
-    try:
-        ftms = pyftms.get_client(
-            srv_info.device,
-            srv_info.advertisement,
-            on_disconnect=_on_disconnect,
-        )
+    # Use stored machine_type from config instead of re-reading from advertisement
+    # This avoids re-triggering Unknown detection for devices like Sole treadmills
+    stored_machine_type = entry.data.get("machine_type")
+    if stored_machine_type:
+        machine_type = pyftms.MachineType[stored_machine_type]
+    else:
+        # Fallback for old config entries without stored machine_type
+        try:
+            machine_type = pyftms.get_machine_type_from_service_data(srv_info.advertisement)
+        except pyftms.NotFitnessMachineError:
+            raise ConfigEntryNotReady(translation_key="ftms_error")
 
-    except pyftms.NotFitnessMachineError:
-        raise ConfigEntryNotReady(translation_key="ftms_error")
+    ftms = pyftms.get_client(
+        srv_info.device,
+        machine_type,
+        on_disconnect=_on_disconnect,
+    )
 
     coordinator = DataCoordinator(hass, ftms)
 
@@ -89,11 +97,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: FtmsConfigEntry) -> bool
 
     _LOGGER.debug(f"Registered new FTMS device. UniqueID is '{unique_id}'.")
 
+    # Filter device_info to only include valid HA DeviceInfo fields
+    # (pyftms may include extra fields like fw_version, system_id that HA doesn't accept)
+    valid_ha_fields = {"manufacturer", "model", "serial_number", "sw_version", "hw_version"}
+    filtered_device_info = {k: v for k, v in ftms.device_info.items() if k in valid_ha_fields}
+
     device_info = dr.DeviceInfo(
         connections={(dr.CONNECTION_BLUETOOTH, ftms.address)},
         identifiers={(DOMAIN, unique_id)},
         translation_key=ftms.machine_type.name.lower(),
-        **ftms.device_info,
+        **filtered_device_info,
     )
 
     entry.runtime_data = FtmsData(
