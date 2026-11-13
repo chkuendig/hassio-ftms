@@ -18,7 +18,6 @@ from homeassistant.config_entries import (
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
-    OptionsFlowWithConfigEntry,
 )
 from homeassistant.const import CONF_ADDRESS, CONF_DISCOVERY, CONF_SENSORS
 from homeassistant.core import callback
@@ -36,9 +35,8 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
-class OptionsFlowHandler(OptionsFlowWithConfigEntry):
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        super().__init__(config_entry)
+class OptionsFlowHandler(OptionsFlow):
+    """Sensor selection options; HA sets self.config_entry."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -68,7 +66,7 @@ class OptionsFlowHandler(OptionsFlowWithConfigEntry):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=self.add_suggested_values_to_schema(schema, self.options),
+            data_schema=self.add_suggested_values_to_schema(schema, self.config_entry.options),
         )
 
 
@@ -94,7 +92,7 @@ class FTMSConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> OptionsFlow:
         """Create the options flow"""
 
-        return OptionsFlowHandler(config_entry)
+        return OptionsFlowHandler()
 
     async def async_step_user(
         self,
